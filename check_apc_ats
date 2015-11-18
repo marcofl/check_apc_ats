@@ -1,0 +1,167 @@
+#!/usr/bin/ruby
+
+# Check_APC_ATS monitors basic status of an APC Automatic Transfer 
+# Switch. It has been tested with a AP7721 but should work with 
+# other models. Change the OIDs below to adapt for other models. 
+#
+# Copyright 2015 by marco.fretz@gmail.com, Version 0.1b
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require 'singleton'
+require 'snmp'
+require 'optparse'
+
+class CheckATS
+ include Singleton
+ ID = 'Check_APC_ATS Icinga check plugin 0.1b'
+ attr_accessor :options
+ 
+ def initialize
+  # defaults for options
+  @options = {
+   :host => 'localhost', 
+   :community => 'public',
+   :voltage_min => 225,
+   :voltage_max => 240
+  }
+  
+  # OIDs for status values
+  oid_base = 'SNMPv2-SMI::enterprises.318.1.1.8'
+  @atsStatusSourceAStatus    = oid_base + '.5.1.12.0'
+  @atsStatusSourceBStatus    = oid_base + '.5.1.13.0'
+  @atsStatusRedundancyState  = oid_base + '.5.1.3.0'
+  @atsStatusOverCurrentState = oid_base + '.5.1.4.0'
+  @atsStatusSelectedSource   = oid_base + '.5.1.2.0' 
+  @atsStatusPrefferedSource  = oid_base + '.4.2.0'
+  # OIDs for table values
+  @atsInputPhaseTableIndex   = oid_base + '.5.3.3.1.1'
+  @atsInputPhaseIndex	     = oid_base + '.5.3.3.1.2' 
+  @atsInputVoltage	     = oid_base + '.5.3.3.1.3' 
+  
+
+  begin
+   get_options
+  rescue ArgumentError => e
+   puts e.message; exit(1)
+  end  
+ end
+ 
+ # command line options
+ def get_options
+  OptionParser.new do |opts|
+    opts.banner = "Usage: #{__FILE__} [options]"
+
+    opts.on("-C", "--community [String]", String, "snmp v1/v2c read-only community") do |community|
+      @options[:community] = community
+    end
+    opts.on("-H", "--host [Hostname]", String, "Hostname / IP of ATS") do |host|
+      @options[:host] = host
+    end
+    opts.on("--vlimit [min:max]", String, "lower and upper voltage limit, e.g. 225:240") do |vlimit|
+      if vlimit !~ /[0-9]+:[0-9]+/
+       puts opts
+       exit 1
+      end
+      @options[:voltage_min] = vlimit.split(':')[0].to_i
+      @options[:voltage_max] = vlimit.split(':')[1].to_i
+    end
+    opts.on("-h","--help","help") do
+      puts opts
+      exit 1
+    end  
+  end.parse!(ARGV) 
+ end
+ 
+ # actual snmp checks
+ def check
+
+  data = {}
+  state = 'OK'
+  output = Array.new
+  exit_code = 0
+
+  SNMP::Manager.open(:host => @options[:host], :community => @options[:community]) do |manager|
+  
+   # get status values
+   response = manager.get([@atsStatusSourceAStatus,
+   @atsStatusSourceBStatus,
+   @atsStatusRedundancyState,
+   @atsStatusOverCurrentState,
+   @atsStatusSelectedSource,
+   @atsStatusPrefferedSource])
+   
+   response.each_varbind do |vb|
+    data[vb.name.to_s] = vb.value
+   end
+
+   # input table walkl
+   inputTable_cols = [ @atsInputPhaseTableIndex, @atsInputPhaseIndex, @atsInputVoltage ]
+   
+   manager.walk(inputTable_cols) do |input,phase,voltage|
+    if voltage.value < @options[:voltage_min] or voltage.value > @options[:voltage_max]
+     output << "Input #{input.value.to_s}-Ph#{phase.value.to_s}: #{voltage.value.to_s}V out of range!"
+     exit_code = 1
+     state = 'WARNING'
+    elsif
+     output << "Input #{input.value.to_s}-Ph#{phase.value.to_s}: #{voltage.value.to_s}V ok"
+    end
+   end
+   
+  end
+
+  # check the values
+  # check redundancy
+  if data[@atsStatusRedundancyState]!=2
+   state = 'WARNING'
+   exit_code = 1
+   output << 'ATS input redundancy lost!'
+  end
+  # check source A
+  if data[@atsStatusSourceAStatus]!=2
+   state = 'WARNING'
+   exit_code = 1
+   output << 'Source A problem / disconnected'
+  end
+  # check source B
+  if data[@atsStatusSourceBStatus]!=2
+   state = 'WARNING'
+   exit_code = 1
+   output << 'Source B problem / disconnected'
+  end
+  # check preffered source
+  if data[@atsStatusPrefferedSource]!=data[@atsStatusSelectedSource]
+   state = 'WARNING'
+   exit_code = 1
+   output << 'ATS not on preffered path'
+  end
+  # check over current
+  if data[@atsStatusOverCurrentState]!=2
+   state = 'CRITICAL'
+   exit_code = 2
+   output << 'ATS is over current limit!'
+  end
+  
+  if exit_code == 0
+   output << 'Status ok'
+  end
+  
+  # print state and exit correctly
+  puts state + ': ' + output.join(", ")
+  exit exit_code
+ end
+end
+
+# run it
+CheckATS.instance.check

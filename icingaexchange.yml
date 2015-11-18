@@ -1,0 +1,8 @@
+name: "check_apc_ats"
+description: "file:///README.md"
+url: "https://github.com/marcofl/check_apc_ats.git"
+tags: APC ATS
+vendor: Marco Fretz
+type: Plugin
+target: DataCenter
+license: GPL 3
