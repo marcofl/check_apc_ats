@@ -21,7 +21,7 @@ define command{
         command_line    $USER1$/check_apc_ats -H $HOSTADDRESS$ -C $ARG1$
         }
 ```
-for old ruby 1.8.x (like on CentOS 6) use this command, so gems require work:
+for old ruby 1.8.x (like on CentOS 6) use this command, so gems require works:
 ```
         command_line /usr/bin/ruby -rubygems $USER1$/check_apc_ats -H $HOSTADDRESS$ -C $ARG1$
 ```
