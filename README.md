@@ -27,17 +27,17 @@ for old ruby 1.8.x (like on CentOS 6) use this command, so gems require works:
 ```
 as an icinga 2.x check command:
 ```
-object CheckCommand "check_apc_ats" {
-  import "plugin-check-command"
+		object CheckCommand "check_apc_ats" {
+			import "plugin-check-command"
 
-  command = [ PluginDir + "/check_apc_ats" ]
+		command = [ PluginDir + "/check_apc_ats" ]
 
-  arguments = {
-	"-H" = "$address$"
-	"-C" = "public"
-  }
-}
-´´´
+		arguments = {
+		"-H" = "$address$"
+		"-C" = "public"
+			}
+		}
+```
 
 ##LICENSE
 This program is free software: you can redistribute it and/or modify
