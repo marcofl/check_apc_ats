@@ -14,7 +14,7 @@ gem install snmp
 ./check_apc_ats -H 1.2.3.4 -C public
 Check ATS: State OK
 ```
-as an icinga check command:
+as an icinga 1.x check command:
 ```
 define command{
         command_name    check_apc_ats
@@ -24,6 +24,19 @@ define command{
 for old ruby 1.8.x (like on CentOS 6) use this command, so gems require works:
 ```
         command_line /usr/bin/ruby -rubygems $USER1$/check_apc_ats -H $HOSTADDRESS$ -C $ARG1$
+```
+as an icinga 2.x check command:
+```
+		object CheckCommand "check_apc_ats" {
+			import "plugin-check-command"
+
+		command = [ PluginDir + "/check_apc_ats" ]
+
+		arguments = {
+		"-H" = "$address$"
+		"-C" = "public"
+			}
+		}
 ```
 
 ##LICENSE
